@@ -1,51 +1,28 @@
-﻿// подключаем бибилиотеки
+﻿// подключаем библиотеки
 #define GLEW_DLL
 #define GLFW_DLL
 
 #include <iostream>
+#include <cmath>               // для sin, cosf
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
-#include <fstream>
-#include <sstream>
-#include <string>
+#include "Shader.h"            // ваша библиотека для загрузки шейдеров
 
-// Вершинный шейдер
-const char* vert_shader =
-"#version 410 core\n"
-"layout (location = 0) in vec3 vp;"
-"void main() {"
-"    gl_Position = vec4(vp, 1.0);"
-"}";
-
-// Фрагментный шейдер
-const char* frag_shader =
-"#version 410 core\n"
-"out vec4 FragColor;"
-"uniform vec4 ourColor;"
-"void main() {"
-"    FragColor = ourColor;"
-"}";
-
-
-int main()
-{
-    //Подключаем проверку на инициализацию через проверку
+int main() {
+    // Инициализация GLFW
     if (!glfwInit()) {
         fprintf(stderr, "ERROR: could not start GLFW3.\n");
         return 1;
     }
 
-    //указание версии OpenGL
-
+    // Указание версии OpenGL
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_FALSE);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    //Создаем контекст окна.
+    // Создание окна
     GLFWwindow* window = glfwCreateWindow(1024, 1024, "Mainwindow", NULL, NULL);
-
-    //Добавляем проверку создания окна и его закрытия при ошибке
     if (!window) {
         glfwTerminate();
         return -1;
@@ -58,38 +35,30 @@ int main()
         fprintf(stderr, "ERROR: %s\n", glewGetErrorString(ret));
         return 1;
     }
-    // Компиляция шейдеров
-    GLuint vertex_shader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertex_shader, 1, &vert_shader, NULL);
-    glCompileShader(vertex_shader);
 
-    GLuint fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragment_shader, 1, &frag_shader, NULL);
-    glCompileShader(fragment_shader);
+    
+    // Загрузка шейдеров из файлов с помощью библиотеки Shader
+    
+    Shader shader("vertex.glsl", "fragment.glsl");
 
-    GLuint shader_program = glCreateProgram();
-    glAttachShader(shader_program, vertex_shader);
-    glAttachShader(shader_program, fragment_shader);
-    glLinkProgram(shader_program);
-
-    glDeleteShader(vertex_shader);
-    glDeleteShader(fragment_shader);
-    // массив фигуры
+    
+    // Подготовка геометрии фигуры
+ 
     float points[] = {
-     -0.4f,  0.0f,  0.0f,   // вершина 0
-     -0.2f,  0.4f,  0.0f,   // вершина 1
-      0.2f,  0.4f,  0.0f,   // вершина 2
-      0.4f,  0.0f,  0.0f,   // вершина 3
-      0.2f, -0.4f,  0.0f,   // вершина 4
-     -0.2f, -0.4f,  0.0f    // вершина 5
+        -0.4f,  0.0f,  0.0f,   // вершина 0
+        -0.2f,  0.4f,  0.0f,   // вершина 1
+         0.2f,  0.4f,  0.0f,   // вершина 2
+         0.4f,  0.0f,  0.0f,   // вершина 3
+         0.2f, -0.4f,  0.0f,   // вершина 4
+        -0.2f, -0.4f,  0.0f    // вершина 5
     };
 
     unsigned int indices[] = {
-    0, 1, 2,
-    0, 2, 3,
-    0, 3, 4,
-    0, 4, 5
-    };;  // порядок обхода
+        0, 1, 2,
+        0, 2, 3,
+        0, 3, 4,
+        0, 4, 5
+    };
 
     GLuint vbo, vao, ebo;
     glGenBuffers(1, &vbo);
@@ -99,67 +68,46 @@ int main()
     glBindVertexArray(vao);
 
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
-
-
-    glBufferData(
-        GL_ARRAY_BUFFER,      // цель буфера
-        sizeof(points),       // размер данных в байтах
-        points,              // указатель на данные
-        GL_STATIC_DRAW        // режим использования
-    );
+    glBufferData(GL_ARRAY_BUFFER, sizeof(points), points, GL_STATIC_DRAW);
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-    glBufferData(
-        GL_ELEMENT_ARRAY_BUFFER,
-        sizeof(indices),
-        indices,
-        GL_STATIC_DRAW
-    );
-    glVertexAttribPointer(
-        0,                    // индекс атрибута (позиция)
-        3,                    // 3 компонента (x, y, z)
-        GL_FLOAT,             // тип данных
-        GL_FALSE,             // нормализация (выключена)
-        3 * sizeof(float),    // шаг между вершинами
-        (void*)0              // смещение в буфере
-    );
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    
 
-    glBindVertexArray(0);
-
-
-
-    //Создаем основной цикл программы
+    
+    // Основной цикл рендеринга
+    
     while (!glfwWindowShouldClose(window)) {
-        glClearColor(1.0, 1.0, 0.5, 1.0);
+        // Очистка экрана
+        glClearColor(1.0f, 1.0f, 0.5f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
-        glUseProgram(shader_program);
 
-
-
+        // Активация шейдерной программы
+        shader.Use();
 
         // Изменение цвета от времени
-        float timeValue = glfwGetTime();
-        float greenValue = (sin(timeValue) / 2.3) + 0.5;
-        float redValue = (cosf(timeValue) / 2.1) + 0.5;
-        GLint vertexColorLocation = glGetUniformLocation(shader_program, "ourColor");
-        glUniform4f(vertexColorLocation, redValue, greenValue, 0.3f, 1.0f);
+        float timeValue = static_cast<float>(glfwGetTime());
+        float greenValue = (std::sin(timeValue) / 2.3f) + 0.5f;
+        float redValue = (std::cos(timeValue) / 2.1f) + 0.5f;
 
+        // Пересылка uniform-переменной в шейдер
+        shader.SetUniform("ourColor", redValue, greenValue, 0.3f, 1.0f);
+
+        // Рендеринг
         glBindVertexArray(vao);
         glDrawElements(GL_TRIANGLES, 12, GL_UNSIGNED_INT, 0);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
-    glDeleteVertexArrays(1, &vao);
-    glDeleteBuffers(1, &vbo);
-    glDeleteBuffers(1, &ebo);
-    glDeleteProgram(shader_program);
+
+    
+    
 
     glfwTerminate();
-
     return 0;
 }
