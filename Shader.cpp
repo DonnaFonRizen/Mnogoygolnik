@@ -2,6 +2,7 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <glm.hpp>
 
 Shader::Shader(const std::string& vertexPath, const std::string& fragmentPath) {
 
@@ -41,7 +42,6 @@ std::string Shader::ReadFile(const std::string& filepath) {
     buffer << file.rdbuf();
     return buffer.str();
 }
-
 
 // Компиляция шейдера
 GLuint Shader::CompileShader(GLenum type, const std::string& source) {

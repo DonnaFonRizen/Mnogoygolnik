@@ -9,10 +9,10 @@ public:
     // Конструктор: загружает вершинный и фрагментный шейдеры из файлов
     Shader(const std::string& vertexPath, const std::string& fragmentPath);
     ~Shader();
-
+    
     // Активировать шейдерную программу
     void Use() const;
-
+    GLuint GetProgram() const { return programID_; }
     // Установка uniform-переменных (перегрузки для разных типов)
     void SetUniform(const std::string& name, int value) const;
     void SetUniform(const std::string& name, float value) const;
@@ -20,7 +20,7 @@ public:
     void SetUniform(const std::string& name, float v0, float v1, float v2) const; // vec3
     void SetUniform(const std::string& name, float v0, float v1, float v2, float v3) const; // vec4
     void SetUniform(const std::string& name, const float* value, int count) const; // массив float
-    // Можно добавить другие: матрицы, int-массивы и т.д.
+    
 
 private:
     GLuint programID_;
