@@ -3,7 +3,7 @@
 #define GLFW_DLL
 
 #include <iostream>
-#include <cmath>               // для sin, cosf
+#include <cmath>               
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include "Shader.h"            
