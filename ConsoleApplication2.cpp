@@ -10,7 +10,7 @@
 #include "glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
 #include "glm/gtc/type_ptr.hpp"
-#include "Model.h"          
+#include "Model.h"
 
 // Глобальные переменные для управления камерой
 const unsigned int SCR_WIDTH = 1024;
@@ -30,6 +30,7 @@ bool firstMouse = true;
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
+// Функции обратного вызова
 void mouse_callback(GLFWwindow* window, double xposIn, double yposIn) {
     float xpos = static_cast<float>(xposIn);
     float ypos = static_cast<float>(yposIn);
@@ -65,6 +66,9 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn) {
 void processInput(GLFWwindow* window) {
     float cameraSpeed = 2.5f * deltaTime;
 
+    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+        glfwSetWindowShouldClose(window, true);
+
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
         cameraPos += cameraSpeed * cameraFront;
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
@@ -82,17 +86,26 @@ void processInput(GLFWwindow* window) {
         cameraPos -= cameraSpeed * cameraUp;
 }
 
+// Установка uniform-матрицы
 void setUniformMatrix4(GLuint program, const std::string& name, const glm::mat4& mat) {
     GLint location = glGetUniformLocation(program, name.c_str());
-    if (location != -1) {
+    if (location != -1)
         glUniformMatrix4fv(location, 1, GL_FALSE, glm::value_ptr(mat));
-    }
-    else {
+    else
         std::cerr << "Uniform " << name << " not found in shader!" << std::endl;
-    }
+}
+
+// Установка uniform-вектора 
+void setUniformVec3(GLuint program, const std::string& name, const glm::vec3& vec) {
+    GLint location = glGetUniformLocation(program, name.c_str());
+    if (location != -1)
+        glUniform3f(location, vec.x, vec.y, vec.z);
+    else
+        std::cerr << "Uniform " << name << " not found in shader!" << std::endl;
 }
 
 int main() {
+    // Инициализация GLFW
     if (!glfwInit()) {
         fprintf(stderr, "ERROR: could not start GLFW3.\n");
         return 1;
@@ -110,6 +123,7 @@ int main() {
     }
     glfwMakeContextCurrent(window);
 
+    // Инициализация GLEW
     glewExperimental = GL_TRUE;
     GLenum ret = glewInit();
     if (ret != GLEW_OK) {
@@ -120,16 +134,40 @@ int main() {
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     glfwSetCursorPosCallback(window, mouse_callback);
 
+    // Загрузка шейдеров
     Shader shader("vertex.glsl", "fragment.glsl");
     shader.Use();
 
-    GLuint shaderProgram = shader.GetProgram();   
 
-    // ===== ЗДЕСЬ ЗАГРУЖАЕМ МОДЕЛЬ =====
-    Model ourModel("4PU.obj");   
+    GLuint shaderProgram = shader.GetProgram();
+
+    // Получение location-ов uniform-переменных 
+    GLint modelLoc = glGetUniformLocation(shaderProgram, "model");
+    GLint viewLoc = glGetUniformLocation(shaderProgram, "view");
+    GLint projLoc = glGetUniformLocation(shaderProgram, "projection");
+    GLint normalMatrixLoc = glGetUniformLocation(shaderProgram, "normalMatrix");
+    GLint viewPosLoc = glGetUniformLocation(shaderProgram, "viewPos");
+    GLint lightPosLoc = glGetUniformLocation(shaderProgram, "lightPos");
+
+    // Фиолетовый материал
+    glUniform3f(glGetUniformLocation(shaderProgram, "material.ambient"), 0.3f, 0.1f, 0.5f);
+    glUniform3f(glGetUniformLocation(shaderProgram, "material.diffuse"), 0.7f, 0.2f, 0.9f);
+    glUniform3f(glGetUniformLocation(shaderProgram, "material.specular"), 1.0f, 0.5f, 1.0f);
+    glUniform1f(glGetUniformLocation(shaderProgram, "material.shininess"), 64.0f);
+    // Источник света 
+    glUniform3f(glGetUniformLocation(shaderProgram, "light.ambient"), 0.2f, 0.2f, 0.2f);
+    glUniform3f(glGetUniformLocation(shaderProgram, "light.diffuse"), 0.5f, 0.5f, 0.5f);
+    glUniform3f(glGetUniformLocation(shaderProgram, "light.specular"), 1.0f, 1.0f, 1.0f);
+
+    // Позиция источника света 
+    glm::vec3 lightPos = glm::vec3(0.0f, 5.0f, 3.0f);
+
+    // Загрузка модели
+    Model ourModel("4PU.obj");
 
     glEnable(GL_DEPTH_TEST);
 
+    // Главный цикл
     while (!glfwWindowShouldClose(window)) {
         float currentFrame = static_cast<float>(glfwGetTime());
         deltaTime = currentFrame - lastFrame;
@@ -137,29 +175,30 @@ int main() {
 
         processInput(window);
 
-        glClearColor(1.0f, 1.0f, 0.5f, 1.0f);
+        glClearColor(1.0f, 1.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         shader.Use();
 
+        // Матрицы
         glm::mat4 model = glm::mat4(1.0f);
         glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
         glm::mat4 projection = glm::perspective(glm::radians(45.0f),
             (float)SCR_WIDTH / (float)SCR_HEIGHT,
             0.1f, 100.0f);
 
-        setUniformMatrix4(shaderProgram, "model", model);
-        setUniformMatrix4(shaderProgram, "view", view);
-        setUniformMatrix4(shaderProgram, "projection", projection);
+        // Передача матриц
+        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+        glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+        glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
 
-        // Цвет 
-        float timeValue = static_cast<float>(glfwGetTime());
-        float greenValue = (std::sin(timeValue) / 2.3f) + 0.5f;
-        float redValue = (std::cos(timeValue) / 2.1f) + 0.5f;
-        GLint colorLoc = glGetUniformLocation(shaderProgram, "ourColor");
-        if (colorLoc != -1) glUniform4f(colorLoc, redValue, greenValue, 0.3f, 1.0f);
 
-        // Отрисовка модели 
+
+        // Передача позиции камеры и источника света
+        glUniform3f(viewPosLoc, cameraPos.x, cameraPos.y, cameraPos.z);
+        glUniform3f(lightPosLoc, lightPos.x, lightPos.y, lightPos.z);
+
+        // Отрисовка модели
         ourModel.Draw(shader);
 
         glfwSwapBuffers(window);
