@@ -6,7 +6,7 @@
 #include <cmath>               // для sin, cosf
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
-#include "Shader.h"            // ваша библиотека для загрузки шейдеров
+#include "Shader.h"            
 #include "glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
 #include "glm/gtc/type_ptr.hpp"
@@ -188,7 +188,7 @@ int main() {
         glClearColor(1.0f, 1.0f, 0.5f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        shader.Use(); // убеждаемся, что программа активна
+        shader.Use(); 
 
         // Матрицы
         glm::mat4 model = glm::mat4(1.0f);
