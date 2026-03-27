@@ -10,7 +10,7 @@
 #include "glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
 #include "glm/gtc/type_ptr.hpp"
-#include "Model.h"          // <-- добавлено
+#include "Model.h"          
 
 // Глобальные переменные для управления камерой
 const unsigned int SCR_WIDTH = 1024;
@@ -123,10 +123,10 @@ int main() {
     Shader shader("vertex.glsl", "fragment.glsl");
     shader.Use();
 
-    GLuint shaderProgram = shader.GetProgram();   // если нет метода, используйте glGetIntegerv
+    GLuint shaderProgram = shader.GetProgram();   
 
     // ===== ЗДЕСЬ ЗАГРУЖАЕМ МОДЕЛЬ =====
-    Model ourModel("4PU.obj");   // замените на свой путь
+    Model ourModel("4PU.obj");   
 
     glEnable(GL_DEPTH_TEST);
 
@@ -152,14 +152,14 @@ int main() {
         setUniformMatrix4(shaderProgram, "view", view);
         setUniformMatrix4(shaderProgram, "projection", projection);
 
-        // Цвет (можно оставить, но лучше передавать uniform для освещения)
+        // Цвет 
         float timeValue = static_cast<float>(glfwGetTime());
         float greenValue = (std::sin(timeValue) / 2.3f) + 0.5f;
         float redValue = (std::cos(timeValue) / 2.1f) + 0.5f;
         GLint colorLoc = glGetUniformLocation(shaderProgram, "ourColor");
         if (colorLoc != -1) glUniform4f(colorLoc, redValue, greenValue, 0.3f, 1.0f);
 
-        // Отрисовка модели вместо шестиугольника
+        // Отрисовка модели 
         ourModel.Draw(shader);
 
         glfwSwapBuffers(window);
