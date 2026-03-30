@@ -1,18 +1,16 @@
-﻿// подключаем библиотеки
+﻿
 #define GLEW_DLL
 #define GLFW_DLL
 
 #include <iostream>
-#include <cmath>
-#include <GL/glew.h>
-#include <GLFW/glfw3.h>
-#include "Shader.h"
+#include "GL/glew.h"
+#include "GLFW/glfw3.h"
 #include "glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
 #include "glm/gtc/type_ptr.hpp"
+#include "Shader.h"
 #include "Model.h"
 
-// Глобальные переменные для управления камерой
 const unsigned int SCR_WIDTH = 1024;
 const unsigned int SCR_HEIGHT = 1024;
 
@@ -20,21 +18,31 @@ glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
 glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
 glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
-float yaw = -90.0f;
-float pitch = 0.0f;
-
 float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;
+float fov = 45.0f;
+float yaw = -90.0f;
+float pitch = 0.0f;
 bool firstMouse = true;
+float sensitivity = 0.1f;
 
-float deltaTime = 0.0f;
-float lastFrame = 0.0f;
+float delta_time = 0.0f;
+float last_frame = 0.0f;
 
-// Функции обратного вызова
-void mouse_callback(GLFWwindow* window, double xposIn, double yposIn) {
-    float xpos = static_cast<float>(xposIn);
-    float ypos = static_cast<float>(yposIn);
+// Переменные для управления роботом
+float slide = 0.0f;           
+float manipAngle = 0.0f;      
+float gripperAngle = 0.0f;    
 
+// Точки вращения 
+glm::vec3 pivotManipToBeam(2.7765f, 3.9442f, 2.0021f);
+glm::vec3 pivotGripperToManip(2.7872f, 4.1649f, 6.1184f);
+
+void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
+    glViewport(0, 0, width, height);
+}
+
+void mouse_callback(GLFWwindow* window, double xpos, double ypos) {
     if (firstMouse) {
         lastX = xpos;
         lastY = ypos;
@@ -46,66 +54,71 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn) {
     lastX = xpos;
     lastY = ypos;
 
-    float sensitivity = 0.1f;
     xoffset *= sensitivity;
     yoffset *= sensitivity;
 
     yaw += xoffset;
     pitch += yoffset;
 
-    if (pitch > 89.0f)  pitch = 89.0f;
+    if (pitch > 89.0f) pitch = 89.0f;
     if (pitch < -89.0f) pitch = -89.0f;
 
-    glm::vec3 direction;
-    direction.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-    direction.y = sin(glm::radians(pitch));
-    direction.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-    cameraFront = glm::normalize(direction);
+    glm::vec3 front;
+    front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+    front.y = sin(glm::radians(pitch));
+    front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+    cameraFront = glm::normalize(front);
 }
 
 void processInput(GLFWwindow* window) {
-    float cameraSpeed = 2.5f * deltaTime;
-
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
+    float cameraSpeed = 2.5f * delta_time;
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
         cameraPos += cameraSpeed * cameraFront;
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
         cameraPos -= cameraSpeed * cameraFront;
-
-    glm::vec3 cameraRight = glm::normalize(glm::cross(cameraFront, cameraUp));
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        cameraPos += cameraSpeed * cameraRight;
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        cameraPos -= cameraSpeed * cameraRight;
+        cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
 
-    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
-        cameraPos += cameraSpeed * cameraUp;
-    if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS)
-        cameraPos -= cameraSpeed * cameraUp;
-}
+    float moveSpeed = delta_time * 2.0f;   // скорость перемещения
+    float rotSpeed = delta_time * 50.0f;  // скорость вращения (градусов/сек)
 
-// Установка uniform-матрицы
-void setUniformMatrix4(GLuint program, const std::string& name, const glm::mat4& mat) {
-    GLint location = glGetUniformLocation(program, name.c_str());
-    if (location != -1)
-        glUniformMatrix4fv(location, 1, GL_FALSE, glm::value_ptr(mat));
-    else
-        std::cerr << "Uniform " << name << " not found in shader!" << std::endl;
-}
+    // Управление линейным перемещением несущей балки (клавиши 1 и 2)
+    if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) {
+        slide += moveSpeed;
+        if (slide > 0.0f) slide = 0.0f;
+    }
+    if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) {
+        slide -= moveSpeed;
+        if (slide < -3.0f) slide = -3.0f;
+    }
 
-// Установка uniform-вектора 
-void setUniformVec3(GLuint program, const std::string& name, const glm::vec3& vec) {
-    GLint location = glGetUniformLocation(program, name.c_str());
-    if (location != -1)
-        glUniform3f(location, vec.x, vec.y, vec.z);
-    else
-        std::cerr << "Uniform " << name << " not found in shader!" << std::endl;
+    // Управление поворотом манипулятора (клавиши 3 и 4)
+    if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS) {
+        manipAngle += rotSpeed;
+        if (manipAngle > 45.0f) manipAngle = 45.0f;
+    }
+    if (glfwGetKey(window, GLFW_KEY_4) == GLFW_PRESS) {
+        manipAngle -= rotSpeed;
+        if (manipAngle < -30.0f) manipAngle = -30.0f;
+    }
+
+    // Управление поворотом кисти (клавиши 5 и 6)
+    if (glfwGetKey(window, GLFW_KEY_5) == GLFW_PRESS) {
+        gripperAngle += rotSpeed;
+        if (gripperAngle > 40.0f) gripperAngle = 40.0f;
+    }
+    if (glfwGetKey(window, GLFW_KEY_6) == GLFW_PRESS) {
+        gripperAngle -= rotSpeed;
+        if (gripperAngle < -40.0f) gripperAngle = -40.0f;
+    }
 }
 
 int main() {
-    // Инициализация GLFW
     if (!glfwInit()) {
         fprintf(stderr, "ERROR: could not start GLFW3.\n");
         return 1;
@@ -113,93 +126,107 @@ int main() {
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_FALSE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Mainwindow", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "4PU 900VH", NULL, NULL);
     if (!window) {
         glfwTerminate();
         return -1;
     }
     glfwMakeContextCurrent(window);
-
-    // Инициализация GLEW
+    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+    glfwSetCursorPosCallback(window, mouse_callback);
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     glewExperimental = GL_TRUE;
+
     GLenum ret = glewInit();
     if (ret != GLEW_OK) {
         fprintf(stderr, "ERROR: %s\n", glewGetErrorString(ret));
         return 1;
     }
 
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-    glfwSetCursorPosCallback(window, mouse_callback);
+    printf("OpenGL Version: %s\n", glGetString(GL_VERSION));
 
-    // Загрузка шейдеров
     Shader shader("vertex.glsl", "fragment.glsl");
-    shader.Use();
-
-
-    GLuint shaderProgram = shader.GetProgram();
-
-    // Получение location-ов uniform-переменных 
-    GLint modelLoc = glGetUniformLocation(shaderProgram, "model");
-    GLint viewLoc = glGetUniformLocation(shaderProgram, "view");
-    GLint projLoc = glGetUniformLocation(shaderProgram, "projection");
-    GLint normalMatrixLoc = glGetUniformLocation(shaderProgram, "normalMatrix");
-    GLint viewPosLoc = glGetUniformLocation(shaderProgram, "viewPos");
-    GLint lightPosLoc = glGetUniformLocation(shaderProgram, "lightPos");
-
-    // Фиолетовый материал
-    glUniform3f(glGetUniformLocation(shaderProgram, "material.ambient"), 0.3f, 0.1f, 0.5f);
-    glUniform3f(glGetUniformLocation(shaderProgram, "material.diffuse"), 0.7f, 0.2f, 0.9f);
-    glUniform3f(glGetUniformLocation(shaderProgram, "material.specular"), 1.0f, 0.5f, 1.0f);
-    glUniform1f(glGetUniformLocation(shaderProgram, "material.shininess"), 64.0f);
-    // Источник света 
-    glUniform3f(glGetUniformLocation(shaderProgram, "light.ambient"), 0.2f, 0.2f, 0.2f);
-    glUniform3f(glGetUniformLocation(shaderProgram, "light.diffuse"), 0.5f, 0.5f, 0.5f);
-    glUniform3f(glGetUniformLocation(shaderProgram, "light.specular"), 1.0f, 1.0f, 1.0f);
-
-    // Позиция источника света 
-    glm::vec3 lightPos = glm::vec3(0.0f, 5.0f, 3.0f);
-
-    // Загрузка модели
-    Model ourModel("4PU.obj");
+    if (shader.GetProgram() == 0) {
+        return 1;
+    }
 
     glEnable(GL_DEPTH_TEST);
 
-    // Главный цикл
+    Model ourModel("4PU.obj");
+
+    glm::vec3 lightPos(1.2f, 1.0f, 2.0f);
+
     while (!glfwWindowShouldClose(window)) {
+       
+        glClearColor(1.0f, 1.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        shader.Use();
+
         float currentFrame = static_cast<float>(glfwGetTime());
-        deltaTime = currentFrame - lastFrame;
-        lastFrame = currentFrame;
+        delta_time = currentFrame - last_frame;
+        last_frame = currentFrame;
 
         processInput(window);
 
-        glClearColor(1.0f, 1.0f, 0.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        shader.Use();
-
-        // Матрицы
-        glm::mat4 model = glm::mat4(1.0f);
         glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
         glm::mat4 projection = glm::perspective(glm::radians(45.0f),
             (float)SCR_WIDTH / (float)SCR_HEIGHT,
             0.1f, 100.0f);
 
-        // Передача матриц
-        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+        unsigned int viewLoc = glGetUniformLocation(shader.GetProgram(), "view");
+        unsigned int projLoc = glGetUniformLocation(shader.GetProgram(), "projection");
         glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
         glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
 
+       
+        glUniform3f(glGetUniformLocation(shader.GetProgram(), "viewPos"), cameraPos.x, cameraPos.y, cameraPos.z);
+        glUniform3f(glGetUniformLocation(shader.GetProgram(), "material.ambient"), 0.3f, 0.1f, 0.5f);
+        glUniform3f(glGetUniformLocation(shader.GetProgram(), "material.diffuse"), 0.7f, 0.2f, 0.9f);
+        glUniform3f(glGetUniformLocation(shader.GetProgram(), "material.specular"), 1.0f, 0.5f, 1.0f);
+        glUniform1f(glGetUniformLocation(shader.GetProgram(), "material.shininess"), 64.0f);
 
+        // Свет
+        glUniform3f(glGetUniformLocation(shader.GetProgram(), "light.position"), lightPos.x, lightPos.y, lightPos.z);
+        glUniform3f(glGetUniformLocation(shader.GetProgram(), "light.ambient"), 0.2f, 0.2f, 0.2f);
+        glUniform3f(glGetUniformLocation(shader.GetProgram(), "light.diffuse"), 0.5f, 0.5f, 0.5f);
+        glUniform3f(glGetUniformLocation(shader.GetProgram(), "light.specular"), 1.0f, 1.0f, 1.0f);
 
-        // Передача позиции камеры и источника света
-        glUniform3f(viewPosLoc, cameraPos.x, cameraPos.y, cameraPos.z);
-        glUniform3f(lightPosLoc, lightPos.x, lightPos.y, lightPos.z);
+        // Массивы матриц для каждой детали  0-станина, 1-балка, 2-манипулятор, 3-кисть
+        glm::mat4 modelMatrices[4];
 
-        // Отрисовка модели
-        ourModel.Draw(shader);
+        // 0: станина 
+        modelMatrices[0] = glm::mat4(1.0f);
+
+        // 1: несущая балка 
+        modelMatrices[1] = glm::translate(glm::mat4(1.0f), glm::vec3(slide, 0.0f, 0.0f));
+
+        // 2: манипулятор 
+        {
+            glm::mat4 m = glm::mat4(1.0f);
+            m = glm::translate(m, glm::vec3(slide, 0.0f, 0.0f));
+            m = glm::translate(m, pivotManipToBeam);
+            m = glm::rotate(m, glm::radians(manipAngle), glm::vec3(1.0f, 0.0f, 0.0f));
+            m = glm::translate(m, -pivotManipToBeam);
+            modelMatrices[2] = m;
+        }
+
+        // 3: кисть 
+        {
+            glm::mat4 m = glm::mat4(1.0f);
+            m = glm::translate(m, glm::vec3(slide, 0.0f, 0.0f));
+            m = glm::translate(m, pivotManipToBeam);
+            m = glm::rotate(m, glm::radians(manipAngle), glm::vec3(1.0f, 0.0f, 0.0f));
+            m = glm::translate(m, -pivotManipToBeam);
+            m = glm::translate(m, pivotGripperToManip);
+            m = glm::rotate(m, glm::radians(gripperAngle), glm::vec3(1.0f, 0.0f, 0.0f));
+            m = glm::translate(m, -pivotGripperToManip);
+            modelMatrices[3] = m;
+        }
+
+        ourModel.Draw(shader, modelMatrices);
 
         glfwSwapBuffers(window);
         glfwPollEvents();

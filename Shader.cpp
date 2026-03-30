@@ -4,33 +4,44 @@
 #include <iostream>
 #include <glm.hpp>
 
+Shader::Shader() : programID_(0) {}
+
 Shader::Shader(const std::string& vertexPath, const std::string& fragmentPath) {
-
-    std::string vertexCode = ReadFile(vertexPath);
-    std::string fragmentCode = ReadFile(fragmentPath);
-
-   
-        GLuint vertexShader = CompileShader(GL_VERTEX_SHADER, vertexCode);
-    GLuint fragmentShader = CompileShader(GL_FRAGMENT_SHADER, fragmentCode);
-
-
-    programID_ = LinkProgram(vertexShader, fragmentShader);
-
-
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
+    load(vertexPath, fragmentPath);
 }
 
 Shader::~Shader() {
-    glDeleteProgram(programID_);
+    if (programID_ != 0)
+        glDeleteProgram(programID_);
 }
 
 void Shader::Use() const {
     glUseProgram(programID_);
 }
 
+bool Shader::load(const std::string& vertexPath, const std::string& fragmentPath) {
+    std::string vertexCode = ReadFile(vertexPath);
+    std::string fragmentCode = ReadFile(fragmentPath);
+    if (vertexCode.empty() || fragmentCode.empty())
+        return false;
 
-// Реализация чтения файла
+    GLuint vertexShader = CompileShader(GL_VERTEX_SHADER, vertexCode);
+    GLuint fragmentShader = CompileShader(GL_FRAGMENT_SHADER, fragmentCode);
+    if (vertexShader == 0 || fragmentShader == 0)
+        return false;
+
+    GLuint newProgram = LinkProgram(vertexShader, fragmentShader);
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
+
+    if (newProgram == 0)
+        return false;
+
+    if (programID_ != 0)
+        glDeleteProgram(programID_);
+    programID_ = newProgram;
+    return true;
+}
 
 std::string Shader::ReadFile(const std::string& filepath) {
     std::ifstream file(filepath);
@@ -43,14 +54,12 @@ std::string Shader::ReadFile(const std::string& filepath) {
     return buffer.str();
 }
 
-// Компиляция шейдера
 GLuint Shader::CompileShader(GLenum type, const std::string& source) {
     GLuint shader = glCreateShader(type);
     const char* src = source.c_str();
     glShaderSource(shader, 1, &src, nullptr);
     glCompileShader(shader);
 
-    // Проверка на ошибки
     GLint success;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
     if (!success) {
@@ -62,9 +71,6 @@ GLuint Shader::CompileShader(GLenum type, const std::string& source) {
     }
     return shader;
 }
-
-
-// Линковка программы
 
 GLuint Shader::LinkProgram(GLuint vertexShader, GLuint fragmentShader) {
     GLuint program = glCreateProgram();
@@ -83,9 +89,6 @@ GLuint Shader::LinkProgram(GLuint vertexShader, GLuint fragmentShader) {
     }
     return program;
 }
-
-
-// Установка uniform-переменных
 
 void Shader::SetUniform(const std::string& name, int value) const {
     glUniform1i(glGetUniformLocation(programID_, name.c_str()), value);
@@ -108,7 +111,6 @@ void Shader::SetUniform(const std::string& name, float v0, float v1, float v2, f
 }
 
 void Shader::SetUniform(const std::string& name, const float* value, int count) const {
-    // Пример для массивов: установка как vec-типа, в зависимости от count
     switch (count) {
     case 1: glUniform1fv(glGetUniformLocation(programID_, name.c_str()), 1, value); break;
     case 2: glUniform2fv(glGetUniformLocation(programID_, name.c_str()), 1, value); break;

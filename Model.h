@@ -1,19 +1,15 @@
 #ifndef MODEL_H
 #define MODEL_H
 
-
 #include <GL\GL.h>
 #include "GLFW/glfw3.h"
-
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
-
 #include "Mesh.h"
 #include "Shader.h"
-
 #include <string>
 #include <fstream>
 #include <sstream>
@@ -24,7 +20,6 @@ using namespace std;
 class Model
 {
 public:
-
     vector<Mesh> meshes;
     string directory;
 
@@ -33,27 +28,29 @@ public:
         loadModel(path);
     }
 
-    void Draw(Shader& shader)
+   
+    void Draw(Shader& shader, glm::mat4* modelMatrices)
     {
-        for (unsigned int i = 0; i < meshes.size(); i++)
+        for (unsigned int i = 0; i < meshes.size() && i < 4; ++i) {
+            unsigned int modelLoc = glGetUniformLocation(shader.programID_, "model");
+            if (modelLoc != -1) {
+                glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(modelMatrices[i]));
+            }
             meshes[i].Draw(shader);
+        }
     }
 
 private:
-
     void loadModel(string const& path)
     {
         Assimp::Importer importer;
-
         const aiScene* scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs);
-
         if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
         {
             cout << "ERROR::ASSIMP:: " << importer.GetErrorString() << endl;
             return;
         }
         directory = path.substr(0, path.find_last_of('/'));
-
         processNode(scene->mRootNode, scene);
     }
 
@@ -64,7 +61,6 @@ private:
             aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
             meshes.push_back(processMesh(mesh, scene));
         }
-
         for (unsigned int i = 0; i < node->mNumChildren; i++)
         {
             processNode(node->mChildren[i], scene);
@@ -80,7 +76,6 @@ private:
         {
             Vertex vertex;
             glm::vec3 vector;
-
             vector.x = mesh->mVertices[i].x;
             vector.y = mesh->mVertices[i].y;
             vector.z = mesh->mVertices[i].z;
@@ -93,10 +88,10 @@ private:
                 vector.z = mesh->mNormals[i].z;
                 vertex.Normal = vector;
             }
-            else {
+            else
+            {
                 vertex.Normal = glm::vec3(0.0f, 0.0f, 0.0f);
             }
-
             vertices.push_back(vertex);
         }
 
@@ -107,10 +102,9 @@ private:
                 indices.push_back(face.mIndices[j]);
         }
 
+        
         return Mesh(vertices, indices);
     }
 };
 
 #endif
-
-
